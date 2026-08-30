@@ -70,6 +70,32 @@ function initSmartPhoneFormatter() {
 }
 
 /**
+ * Helper: Format date to YYYY-MM-DD HH:mm:ss
+ */
+function getFormattedDateTime(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+}
+
+/**
+ * Helper: Format date to YYYY년 MM월 DD일 HH시 mm분 ss초
+ */
+function getFormattedDateTimeKo(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+  return `${year}년 ${month}월 ${day}일 ${hours}시 ${minutes}분 ${seconds}초`;
+}
+
+/**
  * 2. Fake-Door Lead Capture & Validation
  */
 function initFormHandler() {
@@ -103,12 +129,18 @@ function initFormHandler() {
       return;
     }
 
+    const now = new Date();
+    const formattedTime = getFormattedDateTime(now);
+    const formattedTimeKo = getFormattedDateTimeKo(now);
+
     // Capture Lead in LocalStorage
     const leadData = {
       phone: rawPhone,
       source: new URLSearchParams(window.location.search).get('utm_source') || 'direct_landing',
       referrer: document.referrer || 'direct',
-      timestamp: new Date().toISOString()
+      timestamp: now.toISOString(),
+      formatted_time: formattedTime,
+      formatted_time_ko: formattedTimeKo
     };
 
     try {
@@ -119,6 +151,34 @@ function initFormHandler() {
     } catch (err) {
       console.warn('LocalStorage 저장 제한:', err);
     }
+
+    // Send to n8n webhook
+    const webhookUrl = 'https://n8n.the-antigravity-team.com/webhook/878cfdc4-88d3-422e-bfbc-6cd10bf896ba';
+    
+    fetch(webhookUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        phone: rawPhone,
+        received_time: formattedTime,
+        received_time_ko: formattedTimeKo,
+        timestamp: now.toISOString()
+      })
+    })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return response.text();
+    })
+    .then(data => {
+      console.log('🎉 [BIANCO MVP] Webhook sent successfully:', data);
+    })
+    .catch(error => {
+      console.error('❌ [BIANCO MVP] Webhook send failed:', error);
+    });
 
     // Display confirmation modal
     openSuccessModal(rawPhone);
